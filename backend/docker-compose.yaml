@@ -1,0 +1,13 @@
+services:
+  clickhouse:
+    image: clickhouse:24.9
+    container_name: clickhouse
+    ports:
+      - "8123:8123" # HTTP Interface
+      - "9000:9000" # Native Client Interface
+    volumes:
+      - clickhouse_volume:/var/lib/clickhouse
+    restart: unless-stopped
+
+volumes:
+  clickhouse_volume:
