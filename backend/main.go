@@ -23,6 +23,8 @@ func main() {
 	// Used my custom router
 	r := router.NewRouter()
 
+	r.Use(router.DefaultCors())
+
 	repository := repository.NewRepository(DB) // Repository layer
 	service := service.NewService(repository)
 	controller := controller.NewController(service)

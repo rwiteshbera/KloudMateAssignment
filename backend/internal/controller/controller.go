@@ -4,6 +4,7 @@ import (
 	"kloudmate/internal/service"
 	"kloudmate/router"
 	"net/http"
+	"time"
 )
 
 type Controller struct {
@@ -19,18 +20,51 @@ func (c *Controller) TestHandler(ctx *router.Context) {
 }
 
 func (c *Controller) GetTimeSeriesData(ctx *router.Context) {
-	// GET /api/timeseries?start=2020-01-01&end=2021-01-01&metric=cases&countries=US,CA&aggregation=month
-	start := ctx.Query("start")
-	end := ctx.Query("end")
+	startStr := ctx.Query("start")
+	endStr := ctx.Query("end")
 	metric := ctx.Query("metric")
 	countries := ctx.Query("countries")
 	aggregation := ctx.Query("aggregation")
 
-	c.Service.GetTimeSeriesData(start, end, metric, countries, aggregation)
+	// Parse the start and end times
+	startTime, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, "Invalid start date")
+		return
+	}
+	endTime, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, "Invalid end date")
+		return
+	}
 
-	ctx.JSON(http.StatusOK, "Time Series Data")
+	// Start date cannot be after end date
+	if startTime.After(endTime) {
+		ctx.JSON(http.StatusBadRequest, "Start date cannot be after end date")
+		return
+	}
+
+	// If countries is empty or 'all', consider all countries
+	if countries == "" || countries == "'all'" {
+		countries = ""
+	}
+
+	// Get time series data
+	data, err := c.Service.GetTimeSeriesData(ctx.Context(), startStr, endStr, metric, countries, aggregation)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	ctx.JSON(http.StatusOK, data)
 }
 
 func (c *Controller) GetCountries(ctx *router.Context) {
-	ctx.JSON(http.StatusOK, "Country List")
+	// Get countries
+	countries, err := c.Service.GetCountries(ctx.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	ctx.JSON(http.StatusOK, countries)
 }

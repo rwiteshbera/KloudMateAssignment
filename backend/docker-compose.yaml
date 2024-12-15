@@ -9,5 +9,18 @@ services:
       - clickhouse_volume:/var/lib/clickhouse
     restart: unless-stopped
 
+  clickhouse_ui:
+    image: ghcr.io/caioricciuti/ch-ui:latest
+    container_name: clickhouse_ui
+    ports:
+      - "5521:5521"
+    environment:
+      VITE_CLICKHOUSE_URL: http://localhost:8123
+      VITE_CLICKHOUSE_USER: default
+      VITE_CLICKHOUSE_PASS: ""
+    depends_on:
+      - clickhouse
+    restart: unless-stopped
+
 volumes:
   clickhouse_volume:

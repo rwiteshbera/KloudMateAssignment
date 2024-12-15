@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 )
@@ -15,6 +16,10 @@ func NewContext(w http.ResponseWriter, r *http.Request) *Context {
 		Request:  r,
 		Response: w,
 	}
+}
+
+func (c *Context) Context() context.Context {
+	return c.Request.Context()
 }
 
 func (c *Context) JSON(status int, v any) {

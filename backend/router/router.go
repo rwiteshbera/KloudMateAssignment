@@ -11,8 +11,11 @@ type Route struct {
 	Handler func(c *Context)
 }
 
+type Middleware func(http.Handler) http.HandlerFunc
+
 type Router struct {
-	Routes []*Route
+	Routes      []*Route
+	Middlewares []Middleware
 }
 
 func NewRouter() *Router {
@@ -30,13 +33,24 @@ func (r *Router) Handle(method, path string, handler func(c *Context)) {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	for _, route := range r.Routes {
-		if route.Method == req.Method && route.Path == req.URL.Path {
-			route.Handler(NewContext(w, req))
-			return
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		for _, route := range r.Routes {
+			if route.Method == req.Method && route.Path == req.URL.Path {
+				route.Handler(NewContext(w, req))
+				return
+			}
 		}
+		http.NotFound(w, req)
+	})
+
+	for i := len(r.Middlewares) - 1; i >= 0; i-- {
+		handler = r.Middlewares[i](handler)
 	}
-	http.NotFound(w, req)
+	handler.ServeHTTP(w, req)
+}
+
+func (r *Router) Use(middleware Middleware) {
+	r.Middlewares = append(r.Middlewares, middleware)
 }
 
 func (r *Router) GET(path string, handler func(c *Context)) {
