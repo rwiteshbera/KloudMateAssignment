@@ -13,7 +13,7 @@ interface TimeSeriesItem {
 
 export default function Home() {
   const [startDate, setStartDate] = useState("2020-01-01");
-  const [endDate, setEndDate] = useState("2023-01-01");
+  const [endDate, setEndDate] = useState("2022-01-01");
   const [countries, setCountries] = useState<string[]>([]);
   const [metrics, setMetrics] = useState("cases");
 
@@ -75,10 +75,6 @@ export default function Home() {
           plotInstance.current.setData(alignedData);
         } else {
           const options: uPlot.Options = {
-            title:
-              selectedCountry === "all"
-                ? `COVID-19 ${metrics} Across All Countries`
-                : `COVID-19 ${metrics} in ${selectedCountry}`,
             width: 850,
             height: 400,
             scales: { x: { time: false }, y: { auto: true } },
@@ -89,7 +85,7 @@ export default function Home() {
                   ticks.map((t) => labelsRef.current[Math.round(t)] || ""),
               },
               {
-                label: metrics.charAt(0).toUpperCase() + metrics.slice(1),
+                label: "Value",
               },
             ],
             series: [{}, { label: metrics, stroke: "blue" }],
@@ -160,7 +156,7 @@ export default function Home() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <div className="text-center space-y-4">
         <h1 className="text-3xl font-bold text-gray-800">
-          COVID-19 Visualization
+          COVID-19 Data Visualization
         </h1>
         <div className="flex flex-row space-x-4">
           <select
@@ -204,6 +200,9 @@ export default function Home() {
           className="mt-6 w-full max-w-4xl bg-white shadow-md rounded-md p-4 overflow-auto"
           style={{ maxHeight: "500px" }}
         ></div>
+        <p className="text-sm text-gray-800">
+          <a target="_blank" href="https://github.com/rwiteshbera/KloudMateAssignment" className="text-blue-500 hover:underline">Github</a>
+        </p>
       </div>
     </div>
   );

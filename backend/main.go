@@ -7,13 +7,21 @@ import (
 	"kloudmate/internal/service"
 	"kloudmate/router"
 	"log"
+	"os"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	clickhouseConfig := database.ClickhouseConfig{
-		URL:      "localhost:9000",
-		Username: "default",
-		Password: "",
+		URL:      os.Getenv("CLICKHOUSE_URL"),
+		Username: os.Getenv("CLICKHOUSE_USERNAME"),
+		Password: os.Getenv("CLICKHOUSE_PASSWORD"),
 	}
 
 	// Connect to Clickhouse
@@ -34,7 +42,7 @@ func main() {
 	r.GET("/v1/countries", controller.GetCountries)
 
 	// Start the server
-	err := r.Start()
+	err = r.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
