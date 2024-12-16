@@ -195,19 +195,19 @@ export default function Home() {
             <option value="tests">New Tested</option>
           </select>
         </div>
-        {loading ? (
-          <div className="flex justify-center items-center h-full">
-            <p className="text-gray-500 font-bold">Loading...</p>
-          </div>
-        ) : (
-          <></>
-        )}
         <div
           id="chart-container"
           ref={chartRef}
           className="mt-6 w-full max-w-4xl bg-white shadow-md rounded-md p-4 overflow-auto"
           style={{ maxHeight: "500px" }}
         >
+             {loading ? (
+          <div className="flex justify-center items-center h-full">
+            <p className="text-gray-500 font-bold">Loading...</p>
+          </div>
+        ) : (
+          <></>
+        )}
         </div>
         <p className="text-sm text-gray-800">
           <a target="_blank" href="https://github.com/rwiteshbera/KloudMateAssignment" className="text-blue-500 hover:underline">Github</a>
