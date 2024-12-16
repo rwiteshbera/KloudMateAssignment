@@ -16,11 +16,10 @@ export default function Home() {
   const [endDate, setEndDate] = useState("2022-01-01");
   const [countries, setCountries] = useState<string[]>([]);
   const [metrics, setMetrics] = useState("cases");
-
   const [zoomLevel, setZoomLevel] = useState(0);
   const [aggregation, setAggregation] = useState("month");
-
   const [selectedCountry, setSelectedCountry] = useState("all");
+  const [loading, setLoading] = useState(false);
 
   const chartRef = useRef<HTMLDivElement | null>(null);
   const plotInstance = useRef<uPlot | null>(null);
@@ -55,6 +54,7 @@ export default function Home() {
     if (new Date(startDate).getTime() > new Date(endDate).getTime()) return;
 
     const loadChartData = async () => {
+      setLoading(true);
       try {
         const data: TimeSeriesItem[] = await fetchTimeSeries(
           startDate,
@@ -144,6 +144,7 @@ export default function Home() {
             });
           }
         }
+        setLoading(false);
       } catch (error) {
         console.error("Failed to load chart data:", error);
       }
@@ -194,12 +195,20 @@ export default function Home() {
             <option value="tests">New Tested</option>
           </select>
         </div>
+        {loading ? (
+          <div className="flex justify-center items-center h-full">
+            <p className="text-gray-500 font-bold">Loading...</p>
+          </div>
+        ) : (
+          <></>
+        )}
         <div
           id="chart-container"
           ref={chartRef}
           className="mt-6 w-full max-w-4xl bg-white shadow-md rounded-md p-4 overflow-auto"
           style={{ maxHeight: "500px" }}
-        ></div>
+        >
+        </div>
         <p className="text-sm text-gray-800">
           <a target="_blank" href="https://github.com/rwiteshbera/KloudMateAssignment" className="text-blue-500 hover:underline">Github</a>
         </p>
