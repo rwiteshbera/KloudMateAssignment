@@ -38,12 +38,8 @@ The frontend provides:
 ---
 
 ## Screenshots
-![Overview#1](./screenshots/overview-1.png)
+<img width="1280" alt="Screenshot 2024-12-17 at 2 35 07 AM" src="https://github.com/user-attachments/assets/8638afb9-86e2-43b5-ac6c-c09045ea60f3" />
 
-![Overview#2](./screenshots/overview-2.png)
-
-![Overview#3](./screenshots/overview-3.png)
-
-![Overview#4](./screenshots/overview-4.png)
+<img width="1280" alt="Screenshot 2024-12-17 at 2 35 24 AM" src="https://github.com/user-attachments/assets/916d4631-0a70-4a9f-aa76-0b818a3887a0" />
 
 ---
