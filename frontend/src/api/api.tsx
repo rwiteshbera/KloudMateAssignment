@@ -24,14 +24,17 @@ export const fetchTimeSeries = async (
   endDate: string,
   metric: string,
   aggregation: string,
-  selectedCountry: string
+  selectedCountry: string[]
 ) => {
   try {
-    const url =
-      selectedCountry === "all"
-        ? `/v1/timeseries?start=${startDate}&end=${endDate}&metric=${metric}&aggregation=${aggregation}`
-        : `/v1/timeseries?start=${startDate}&end=${endDate}&metric=${metric}&countries='${selectedCountry}'&aggregation=${aggregation}`;
+    const countryQuery =
+      selectedCountry.length > 0
+        ? selectedCountry.map((country) => `'${country}'`).join(",")
+        : "'US'";
+    const url = `/v1/timeseries?start=${startDate}&end=${endDate}&metric=${metric}&countries=${countryQuery}&aggregation=${aggregation}`;
+
     const response = await axiosInstance.get(url);
+
     return response.data;
   } catch (error) {
     console.error("Error fetching chart data:", error);

@@ -14,7 +14,7 @@ func NewService(repository *repository.Repository) *Service {
 	return &Service{Repository: repository}
 }
 
-func (s *Service) GetTimeSeriesData(ctx context.Context, start, end, metric, countries, aggregation string) ([]repository.TimeSeriesData, error) {
+func (s *Service) GetTimeSeriesData(ctx context.Context, start, end, metric, countries, aggregation string) (map[string][]int64, []string, error) {
 	allowedMetrics := map[string]string{
 		"cases":                 "new_confirmed",
 		"deaths":                "new_deceased",
@@ -27,7 +27,7 @@ func (s *Service) GetTimeSeriesData(ctx context.Context, start, end, metric, cou
 	}
 	column, ok := allowedMetrics[metric]
 	if !ok {
-		return nil, fmt.Errorf("invalid metric: %s", metric)
+		return nil, nil, fmt.Errorf("invalid metric: %s", metric)
 	}
 
 	var timeGrouping string
@@ -39,7 +39,7 @@ func (s *Service) GetTimeSeriesData(ctx context.Context, start, end, metric, cou
 	case "day":
 		timeGrouping = "date"
 	default:
-		return nil, fmt.Errorf("invalid aggregation: %s", aggregation)
+		return nil, nil, fmt.Errorf("invalid aggregation: %s", aggregation)
 	}
 
 	var countryFilter string
@@ -48,30 +48,30 @@ func (s *Service) GetTimeSeriesData(ctx context.Context, start, end, metric, cou
 	}
 
 	var data []repository.TimeSeriesData
-	var err error
-	if countryFilter == "" {
-		data, err = s.Repository.GetAggregatedTimeSeriesData(ctx, start, end, timeGrouping, column, countryFilter)
-	} else {
-		data, err = s.Repository.GetCountryTimeSeriesData(ctx, start, end, timeGrouping, column, countryFilter)
-	}
+	data, err := s.Repository.GetCountryTimeSeriesData(ctx, start, end, timeGrouping, column, countryFilter)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Format labels based on aggregation
 	for i := range data {
-		switch aggregation {
-		case "month":
-			data[i].Label = data[i].Date.Format("Jan 2006")
-		case "week":
-			_, w := data[i].Date.ISOWeek()
-			data[i].Label = fmt.Sprintf("Week %d", w)
-		case "day":
-			data[i].Label = data[i].Date.Format("2006-01-02")
+		data[i].Label = data[i].Date.Format("2006-01-02")
+	}
+
+	groupedData := make(map[string][]int64)
+	var labels []string
+	var labelSet = make(map[string]bool)
+
+	for _, d := range data {
+		groupedData[d.Country] = append(groupedData[d.Country], d.Value)
+
+		if !labelSet[d.Date.Format("2006-01-02")] {
+			labels = append(labels, d.Label)
+			labelSet[d.Date.Format("2006-01-02")] = true
 		}
 	}
 
-	return data, nil
+	return groupedData, labels, nil
 }
 
 func (s *Service) GetCountries(ctx context.Context) ([]string, error) {

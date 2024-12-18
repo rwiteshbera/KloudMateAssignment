@@ -44,19 +44,17 @@ func (c *Controller) GetTimeSeriesData(ctx *router.Context) {
 		return
 	}
 
-	// If countries is empty or 'all', consider all countries
-	if countries == "" || countries == "'all'" {
-		countries = ""
-	}
-
 	// Get time series data
-	data, err := c.Service.GetTimeSeriesData(ctx.Context(), startStr, endStr, metric, countries, aggregation)
+	groupedData, labels, err := c.Service.GetTimeSeriesData(ctx.Context(), startStr, endStr, metric, countries, aggregation)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	ctx.JSON(http.StatusOK, data)
+	ctx.JSON(http.StatusOK, map[string]interface{}{
+		"data":   groupedData,
+		"labels": labels,
+	})
 }
 
 func (c *Controller) GetCountries(ctx *router.Context) {

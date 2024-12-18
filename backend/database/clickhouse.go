@@ -1,7 +1,6 @@
 package database
 
 import (
-	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"log"
@@ -19,7 +18,7 @@ func ConnectClickhouse(config ClickhouseConfig) *sql.DB {
 	DB := clickhouse.OpenDB(&clickhouse.Options{
 		Addr:     []string{config.URL},
 		Protocol: clickhouse.Native,
-		TLS:      &tls.Config{},
+		// TLS:      &tls.Config{},
 		Auth: clickhouse.Auth{
 			Username: config.Username,
 			Password: config.Password,

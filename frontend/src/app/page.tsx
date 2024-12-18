@@ -1,30 +1,58 @@
 "use client";
-
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import uPlot, { AlignedData } from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { fetchCountries, fetchTimeSeries } from "../api/api";
+import dynamic from "next/dynamic";
+import { formatLabel, ONE_YEAR, ONE_MONTH } from "../utils/format";
+import stringToColor from "../utils/color";
 
-interface TimeSeriesItem {
-  date: string;
-  value: number;
-  label: string;
-}
+const Select = dynamic(() => import("react-select"), { ssr: false });
 
 export default function Home() {
-  const [startDate, setStartDate] = useState("2020-01-01");
-  const [endDate, setEndDate] = useState("2022-01-01");
+
+  const aggregationLevels = ["month", "week", "day"] as const;
+  type Aggregation = typeof aggregationLevels[number];
+
+  const [dateRange, setDateRange] = useState<Date[]>([
+    new Date("2020-01-01"),
+    new Date("2022-01-01"),
+  ]);
   const [countries, setCountries] = useState<string[]>([]);
   const [metrics, setMetrics] = useState("cases");
-  const [zoomLevel, setZoomLevel] = useState(0);
-  const [aggregation, setAggregation] = useState("month");
-  const [selectedCountry, setSelectedCountry] = useState("all");
+  const [aggregation, setAggregation] = useState<Aggregation>("month");
+  const [selectedCountry, setSelectedCountry] = useState<string[]>(["US"]);
   const [loading, setLoading] = useState(false);
 
   const chartRef = useRef<HTMLDivElement | null>(null);
   const plotInstance = useRef<uPlot | null>(null);
 
   const labelsRef = useRef<string[]>([]);
+
+  const isZooming = useRef(false);
+
+  const getNextAggregation = (
+    current: Aggregation,
+    direction: "in" | "out"
+  ): Aggregation | null => {
+    const currentIndex = aggregationLevels.indexOf(current);
+    if (direction === "in" && currentIndex < aggregationLevels.length - 1) {
+      return aggregationLevels[currentIndex + 1];
+    } else if (direction === "out" && currentIndex > 0) {
+      return aggregationLevels[currentIndex - 1];
+    }
+    return null; 
+  };
+
+  // Color mapping
+  const colorMapRef = useRef<{ [country: string]: string }>({});
+
+  const getColorForCountry = (country: string): string => {
+    if (!colorMapRef.current[country]) {
+      colorMapRef.current[country] = stringToColor(country);
+    }
+    return colorMapRef.current[country];
+  };
 
   useEffect(() => {
     const loadCountries = async () => {
@@ -39,119 +67,167 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const duration =
-      new Date(endDate).getTime() - new Date(startDate).getTime();
-
-    if (zoomLevel === 0) setAggregation("month");
-    else if (zoomLevel === 1) {
-      if (duration <= 365 * 24 * 60 * 60 * 1000) setAggregation("week");
-    } else if (zoomLevel === 2) {
-      if (duration <= 30 * 24 * 60 * 60 * 1000) setAggregation("day");
-    }
-  }, [zoomLevel]);
-
-  useEffect(() => {
-    if (new Date(startDate).getTime() > new Date(endDate).getTime()) return;
-
+    if (dateRange.length !== 2) return;
     const loadChartData = async () => {
       setLoading(true);
       try {
-        const data: TimeSeriesItem[] = await fetchTimeSeries(
-          startDate,
-          endDate,
+        const response = await fetchTimeSeries(
+          dateRange[0].toISOString().split("T")[0],
+          dateRange[1].toISOString().split("T")[0],
           metrics,
           aggregation,
           selectedCountry
         );
 
-        const indices = data.map((_, i) => i);
-        const values = data.map((item) => item.value);
-        const labels = data.map((item) => item.label);
-        labelsRef.current = labels;
+        labelsRef.current = response.labels;
 
-        const alignedData: AlignedData = [indices, values];
+        const indices = response.labels.map((_: any, i: number) => i);
+
+        const alignedData: AlignedData = [
+          indices,
+          ...selectedCountry.map((country) => response.data[country] || []),
+        ];
 
         if (plotInstance.current) {
-          plotInstance.current.setData(alignedData);
-        } else {
-          const options: uPlot.Options = {
-            width: 850,
-            height: 400,
-            scales: { x: { time: false }, y: { auto: true } },
-            axes: [
-              {
-                label: "Time",
-                values: (u, ticks) =>
-                  ticks.map((t) => labelsRef.current[Math.round(t)] || ""),
-              },
-              {
-                label: "Value",
+          plotInstance.current.destroy();
+        }
+
+        const options: uPlot.Options = {
+          width: 850,
+          height: 400,
+          scales: { x: { time: false }, y: { auto: true } },
+          axes: [
+            {
+              label: "Time",
+              values: (u, ticks) =>
+                ticks.map(
+                  (t) =>
+                    formatLabel(
+                      labelsRef.current[Math.round(t)] || "",
+                      aggregation
+                    ) || ""
+                ),
+            },
+            {
+              label: "Value",
+            },
+          ],
+          series: [
+            {},
+            ...selectedCountry.map((country) => ({
+              label: country,
+              stroke: getColorForCountry(country),
+              width: 2,
+            })),
+          ],
+          hooks: {
+            ready: [
+              (u) => {
+                const tooltip = document.createElement("div");
+                tooltip.style.position = "absolute";
+                tooltip.style.background = "#fff";
+                tooltip.style.border = "1px solid #ccc";
+                tooltip.style.padding = "5px";
+                tooltip.style.fontSize = "12px";
+                tooltip.style.pointerEvents = "none";
+                tooltip.style.display = "none";
+                document.body.appendChild(tooltip);
+
+                u.over.addEventListener("mousemove", (e: MouseEvent) => {
+                  const { left, top } = u.cursor.left
+                    ? u.cursor
+                    : { left: null, top: null };
+                  if (left === null || top === null) {
+                    tooltip.style.display = "none";
+                    return;
+                  }
+
+                  const idx = u.cursor.idx!;
+                  const label = labelsRef.current[idx] || "";
+
+                  // Build tooltip for all selected countries
+                  let tooltipContent = `<strong>${label}</strong><br />`;
+                  selectedCountry.forEach((country, i) => {
+                    const value = alignedData[i + 1][idx];
+                    tooltipContent += `${country}: ${value} ${metrics}<br />`;
+                  });
+
+                  tooltip.style.left = `${e.pageX + 10}px`;
+                  tooltip.style.top = `${e.pageY + 10}px`;
+                  tooltip.style.display = "block";
+                  tooltip.innerHTML = tooltipContent;
+                });
+
+                u.over.addEventListener("mouseleave", () => {
+                  tooltip.style.display = "none";
+                });
               },
             ],
-            series: [{}, { label: metrics, stroke: "blue" }],
-            hooks: {
-              ready: [
-                (u) => {
-                  const tooltip = document.createElement("div");
-                  tooltip.style.position = "absolute";
-                  tooltip.style.background = "#fff";
-                  tooltip.style.border = "1px solid #ccc";
-                  tooltip.style.padding = "5px";
-                  tooltip.style.fontSize = "12px";
-                  tooltip.style.pointerEvents = "none";
-                  tooltip.style.display = "none";
-                  document.body.appendChild(tooltip);
+          },
+        };
 
-                  u.over.addEventListener("mousemove", (e) => {
-                    const { left, top } = u.cursor.left
-                      ? u.cursor
-                      : { left: null, top: null };
-                    if (left === null || top === null) {
-                      tooltip.style.display = "none";
-                      return;
-                    }
-
-                    const idx = u.cursor.idx!;
-                    const label = labelsRef.current[idx] || "";
-                    const value = alignedData[1][idx];
-
-                    tooltip.style.left = `${e.pageX + 10}px`;
-                    tooltip.style.top = `${e.pageY + 10}px`;
-                    tooltip.style.display = "block";
-                    tooltip.innerHTML = `<strong>${label}</strong><br />${value} ${metrics}`;
-                  });
-
-                  u.over.addEventListener("mouseleave", () => {
-                    tooltip.style.display = "none";
-                  });
-                },
-              ],
-            },
-          };
-
-          if (chartRef.current) {
-            plotInstance.current = new uPlot(
-              options,
-              alignedData,
-              chartRef.current
-            );
-
-            chartRef.current.addEventListener("wheel", (e) => {
-              e.preventDefault();
-              setZoomLevel((prev) =>
-                e.deltaY > 0 ? Math.min(prev + 1, 2) : Math.max(prev - 1, 0)
-              );
-            });
-          }
+        if (chartRef.current) {
+          plotInstance.current = new uPlot(options, alignedData, chartRef.current);
         }
+
         setLoading(false);
+        isZooming.current = false; // Reset the zooming flag after loading
       } catch (error) {
         console.error("Failed to load chart data:", error);
+        setLoading(false);
+        isZooming.current = false; // Reset the zooming flag on error
       }
     };
 
-    loadChartData();
-  }, [selectedCountry, aggregation, metrics, startDate, endDate]);
+    if (selectedCountry.length > 0) loadChartData();
+  }, [selectedCountry, aggregation, metrics, dateRange]);
+
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault();
+
+      // Prevent handling another zoom while current zoom is processing
+      if (isZooming.current) return;
+
+      let direction: "in" | "out" | null = null;
+      if (e.deltaY < 0) {
+        direction = "in"; // Zoom in
+      } else if (e.deltaY > 0) {
+        direction = "out"; // Zoom out
+      }
+
+      if (!direction) return;
+
+      const nextAgg = getNextAggregation(aggregation, direction);
+      if (nextAgg && plotInstance.current) {
+        const u = plotInstance.current;
+        const start = u.cursor.idx
+       
+        if(start != null) {
+          const startDate = new Date(labelsRef.current[start])
+          if(nextAgg === "week") {
+            setDateRange([startDate, new Date(startDate.getTime() + ONE_YEAR)]) 
+          } else if(nextAgg === "day") {
+            setDateRange([startDate, new Date(startDate.getTime() + ONE_MONTH)]) 
+          }
+        }
+        isZooming.current = true; // Set the zooming flag
+        setAggregation(nextAgg);
+      }
+    },
+    [aggregation]
+  );
+
+  useEffect(() => {
+    const chartElement = chartRef.current;
+    if (!chartElement) return;
+
+    chartElement.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      chartElement.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
@@ -159,29 +235,61 @@ export default function Home() {
         <h1 className="text-3xl font-bold text-gray-800">
           COVID-19 Data Visualization
         </h1>
-        <div className="flex flex-row space-x-4">
-          <select
-            onChange={(e) => setSelectedCountry(e.target.value)}
-            value={selectedCountry}
-            className="block w-48 px-4 py-2 border border-gray-300 rounded-md"
-          >
-            <option value="all">All Countries</option>
-            {countries.map((country) => (
-              <option key={country} value={country}>
-                {country}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-row flex-wrap justify-center space-x-4">
+          <Select
+            isMulti
+            options={countries.map((country) => ({
+              value: country,
+              label: country,
+            }))}
+            onChange={(e: any) => {
+              setSelectedCountry(e.map((item: any) => item.value));
+            }}
+            value={selectedCountry.map((country) => ({
+              value: country,
+              label: country,
+            }))}
+            className="w-60"
+            styles={{
+              control: (base) => ({
+                ...base,
+                borderColor: "#ccc",
+                boxShadow: "none",
+              }),
+              multiValue: (base, { data }: { data: any }) => ({
+                ...base,
+                backgroundColor: getColorForCountry(data.value),
+                color: "white", 
+              }),
+              multiValueLabel: (base, { data }: { data: any }) => ({
+                ...base,
+                color: "white",
+              }),
+              multiValueRemove: (base, { data }: { data: any }) => ({
+                ...base,
+                color: "white",
+                ":hover": {
+                  backgroundColor: "darkred",
+                  color: "white",
+                },
+              }),
+            }}
+          />
+
           <input
             type="date"
-            onChange={(e) => setStartDate(e.target.value)}
-            value={startDate}
+            onChange={(e) =>
+              setDateRange([new Date(e.target.value), dateRange[1]])
+            }
+            value={dateRange[0].toISOString().split("T")[0]}
             className="block w-48 px-4 py-2 border border-gray-300 rounded-md"
           />
           <input
             type="date"
-            onChange={(e) => setEndDate(e.target.value)}
-            value={endDate}
+            onChange={(e) =>
+              setDateRange([dateRange[0], new Date(e.target.value)])
+            }
+            value={dateRange[1].toISOString().split("T")[0]}
             className="block w-48 px-4 py-2 border border-gray-300 rounded-md"
           />
           <select
@@ -198,19 +306,27 @@ export default function Home() {
         <div
           id="chart-container"
           ref={chartRef}
-          className="mt-6 w-full max-w-4xl bg-white shadow-md rounded-md p-4 overflow-auto"
-          style={{ maxHeight: "500px" }}
+          className="mt-6 w-full max-w-4xl bg-white shadow-md rounded-md p-4 overflow-hidden relative"
+          style={{ maxHeight: "500px", height: "500px" }}
         >
-             {loading ? (
-          <div className="flex justify-center items-center h-full">
-            <p className="text-gray-500 font-bold">Loading...</p>
-          </div>
-        ) : (
-          <></>
-        )}
+          {loading && (
+            <div className="flex justify-center items-center h-full absolute inset-0 bg-white bg-opacity-75 z-10">
+              <p className="text-gray-500 font-bold">Loading...</p>
+            </div>
+          )}
         </div>
         <p className="text-sm text-gray-800">
-          <a target="_blank" href="https://github.com/rwiteshbera/KloudMateAssignment" className="text-blue-500 hover:underline">Github</a>
+          <a
+            target="_blank"
+            href="https://github.com/rwiteshbera/KloudMateAssignment"
+            className="text-blue-500 hover:underline"
+            rel="noopener noreferrer"
+          >
+            Github
+          </a>
+        </p>
+        <p className="text-sm text-gray-600">
+          Current Aggregation: <strong>{aggregation}</strong>
         </p>
       </div>
     </div>
